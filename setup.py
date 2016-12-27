@@ -33,7 +33,7 @@ SETUP_METADATA = \
     "author_email": "titus@idyll.org",
     "license": "BSD 3-clause",
     "scripts": ['syrah'],
-    "install_requires": ["khmer>2.0,<3", "screed>=0.9,<2.0"],
+#    "install_requires": ["khmer>2.0,<3", "screed>=0.9,<2.0"],
     "extras_require": {
         'test' : ['pytest', 'pytest-cov'],
         },
