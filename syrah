@@ -33,27 +33,7 @@ def trusted_regions(seq, errors_at, minsize):
         yield seq[start:end]
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-k', '--ksize', type=int, default=DEFAULT_K)
-    parser.add_argument('-F', '--fp-rate', type=float, default=DEFAULT_FP)
-    parser.add_argument('-n', '--num-kmers', type=float, default=DEFAULT_N)
-    args = parser.parse_args()
-
-    notify('')
-    notify('syrah!')
-    notify('')
-    notify('   reading sequences and outputting solid regions until')
-    notify('   we see ~{} {}-mers.', int(args.num_kmers), args.ksize)
-    notify('')
-
-    mem = khmer_args.optimal_size(args.num_kmers, fp_rate=args.fp_rate)
-    notify("creating counttable using {} x {} bytes",
-           mem.num_htables, mem.htable_size)
-
-    ct = Counttable(args.ksize, mem.htable_size, mem.num_htables)
-    hll = HLLCounter(0.01, args.ksize)
-
+def run(ct, hll, num_kmers, ksize):
     notify('reading sequences from stdin')
     screed_iter = screed.open('/dev/stdin')
     clean_iter = khmer_utils.clean_input_reads(screed_iter)
@@ -66,25 +46,60 @@ def main():
                    n, hll.estimate_cardinality(), n_output)
             watermark += WATERMARK_SIZE
 
-            if hll.estimate_cardinality() > args.num_kmers:
+            if hll.estimate_cardinality() > num_kmers:
                 notify('')
                 notify('reached {} kmers; success! ending now.',
-                       int(args.num_kmers))
+                       int(num_kmers))
                 break
 
         seq = record.cleaned_seq
         if ct.median_at_least(seq, NORMALIZE_TO):
             errors_at = ct.find_spectral_error_positions(seq, TRUSTED_CUTOFF)
 
-            for subseq in trusted_regions(seq, errors_at, args.ksize):
+            for subseq in trusted_regions(seq, errors_at, ksize):
                 sys.stdout.write('>{}\n{}\n'.format(n_output, subseq))
                 hll.consume_string(subseq)
                 n_output += 1
         else:
             ct.consume(record.cleaned_seq)
-    else:
+
+    cardinality = hll.estimate_cardinality()
+    if cardinality < num_kmers:
         notify('reached end of input without finding enough k-mers :(')
+        notify('(found {}; wanted {})', hll.estimate_cardinality(), num_kmers)
+        return -1
+
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-k', '--ksize', type=int, default=DEFAULT_K)
+    parser.add_argument('-F', '--fp-rate', type=float, default=DEFAULT_FP)
+    parser.add_argument('-n', '--num-kmers', type=float, default=DEFAULT_N)
+    args = parser.parse_args()
+
+    notify('')
+    notify('syrah!')
+    notify('')
+    notify('   reading sequences and outputting solid regions until')
+    notify('   we have seen ~{} {}-mers.', int(args.num_kmers), args.ksize)
+    notify('')
+
+    mem = khmer_args.optimal_size(args.num_kmers, fp_rate=args.fp_rate)
+    notify("creating counttable using {} x {} bytes",
+           mem.num_htables, mem.htable_size)
+
+    ct = Counttable(args.ksize, mem.htable_size, mem.num_htables)
+    hll = HLLCounter(0.01, args.ksize)
+
+    try:
+        retval = run(ct, hll, int(args.num_kmers), args.ksize)
+    except ValueError:
+        notify("** error on input; quitting **")
         sys.exit(-1)
+
+    sys.exit(retval)
 
 
 if __name__ == '__main__':
