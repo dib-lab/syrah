@@ -69,7 +69,7 @@ def main():
             if hll.estimate_cardinality() > args.num_kmers:
                 notify('')
                 notify('reached {} kmers; success! ending now.',
-                       args.num_kmers)
+                       int(args.num_kmers))
                 break
 
         seq = record.cleaned_seq
