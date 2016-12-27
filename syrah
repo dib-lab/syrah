@@ -1,0 +1,91 @@
+#! /usr/bin/env python
+from __future__ import print_function
+import sys
+import argparse
+import screed
+from khmer import Counttable, HLLCounter, khmer_args
+from khmer import utils as khmer_utils
+
+DEFAULT_N = 1e6
+DEFAULT_FP = 0.05
+DEFAULT_K = 21
+WATERMARK_SIZE = 10000
+
+NORMALIZE_TO = 10
+TRUSTED_CUTOFF = 5
+
+def notify(s, *args, **kwargs):
+    print(s.format(*args, **kwargs), file=sys.stderr)
+
+
+def trusted_regions(seq, errors_at, minsize):
+    start = 0
+    for pos in errors_at:
+        if pos == start:
+            pass
+        else:
+            if pos - start >= minsize:
+                yield seq[start:pos]
+        start = pos + 1
+
+    end = len(seq)
+    if start - end >= minsize:
+        yield seq[start:end]
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-k', '--ksize', type=int, default=DEFAULT_K)
+    parser.add_argument('-F', '--fp-rate', type=float, default=DEFAULT_FP)
+    parser.add_argument('-n', '--num-kmers', type=float, default=DEFAULT_N)
+    args = parser.parse_args()
+
+    notify('')
+    notify('syrah!')
+    notify('')
+    notify('   reading sequences and outputting solid regions until')
+    notify('   we see ~{} {}-mers.', int(args.num_kmers), args.ksize)
+    notify('')
+
+    mem = khmer_args.optimal_size(args.num_kmers, fp_rate=args.fp_rate)
+    notify("creating counttable using {} x {} bytes",
+           mem.num_htables, mem.htable_size)
+
+    ct = Counttable(args.ksize, mem.htable_size, mem.num_htables)
+    hll = HLLCounter(0.01, args.ksize)
+
+    notify('reading sequences from stdin')
+    screed_iter = screed.open('/dev/stdin')
+    clean_iter = khmer_utils.clean_input_reads(screed_iter)
+    watermark = WATERMARK_SIZE
+    n_output = 0
+    
+    for n, record in enumerate(clean_iter):
+        if n >= watermark:
+            notify('... read {} sequences, ~{} kmers; output {} seqs',
+                   n, hll.estimate_cardinality(), n_output)
+            watermark += WATERMARK_SIZE
+
+            if hll.estimate_cardinality() > args.num_kmers:
+                notify('')
+                notify('reached {} kmers; success! ending now.',
+                       args.num_kmers)
+                break
+
+        seq = record.cleaned_seq
+        if ct.median_at_least(seq, NORMALIZE_TO):
+            errors_at = ct.find_spectral_error_positions(seq, TRUSTED_CUTOFF)
+
+            for subseq in trusted_regions(seq, errors_at, args.ksize):
+                sys.stdout.write('>{}\n{}\n'.format(n_output, subseq))
+                hll.consume_string(subseq)
+                n_output += 1
+        else:
+            ct.consume(record.cleaned_seq)
+    else:
+        notify('reached end of input without finding enough k-mers :(')
+        sys.exit(-1)
+
+
+if __name__ == '__main__':
+   main()
