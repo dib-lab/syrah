@@ -19,6 +19,10 @@ def notify(s, *args, **kwargs):
 
 
 def trusted_regions(seq, errors_at, minsize):
+    "Break sequences into subsequences at errors, yield subsequences."
+    if not errors_at:
+        yield seq
+
     start = 0
     for pos in errors_at:
         if pos == start:
@@ -34,24 +38,37 @@ def trusted_regions(seq, errors_at, minsize):
 
 
 def run(ct, hll, num_kmers, ksize):
+    """
+    Read sequences from stdin & yield high-abundance k-mers until num_kmers
+    have been found.
+    """
+
+    # set up iterator, reporting periods, and counters
     notify('reading sequences from stdin')
     screed_iter = screed.open('/dev/stdin')
     clean_iter = khmer_utils.clean_input_reads(screed_iter)
     watermark = WATERMARK_SIZE
     n_output = 0
-    
+
+    # iterate over input records
     for n, record in enumerate(clean_iter):
+        # at each watermark, print status & check cardinality
         if n >= watermark:
-            notify('... read {} sequences, ~{} kmers; output {} seqs',
-                   n, hll.estimate_cardinality(), n_output)
+            cardinality = hll.estimate_cardinality()
+
+            notify('... read {} sequences, ~{} kmers; output {} regions',
+                   n, cardinality, n_output)
             watermark += WATERMARK_SIZE
 
-            if hll.estimate_cardinality() > num_kmers:
+            # done? if so, exit.
+            if cardinality > num_kmers:
                 notify('')
                 notify('reached {} kmers; success! ending now.',
                        int(num_kmers))
                 break
 
+        # for each input sequence, check abundance; if above threshold,
+        # break up by errors and print out.
         seq = record.cleaned_seq
         if ct.median_at_least(seq, NORMALIZE_TO):
             errors_at = ct.find_spectral_error_positions(seq, TRUSTED_CUTOFF)
@@ -60,15 +77,17 @@ def run(ct, hll, num_kmers, ksize):
                 sys.stdout.write('>{}\n{}\n'.format(n_output, subseq))
                 hll.consume_string(subseq)
                 n_output += 1
-        else:
+        else:                             # if low abundance, just consume
             ct.consume(record.cleaned_seq)
 
+    # post loop, check if we found enough k-mers; exit with an error if not.
     cardinality = hll.estimate_cardinality()
     if cardinality < num_kmers:
         notify('reached end of input without finding enough k-mers :(')
         notify('(found {}; wanted {})', hll.estimate_cardinality(), num_kmers)
         return -1
 
+    # success!
     return 0
 
 

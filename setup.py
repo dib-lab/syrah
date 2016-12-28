@@ -4,7 +4,7 @@ from setuptools import setup
 from setuptools import Extension
 import os
 
-VERSION="0.1"
+VERSION="0.2"
 
 CLASSIFIERS = [
     "Environment :: Console",
