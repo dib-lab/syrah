@@ -11,6 +11,8 @@ You can specify the number of solid k-mers with `-n`.
 
 You can set the k-mer size with `-k`.
 
+You can eliminate all output with `-q`.
+
 There are no other options because options lead to anger. Anger leads to
 hate. Hate leads to suffering.
 

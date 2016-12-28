@@ -19,9 +19,11 @@ WATERMARK_SIZE = 10000
 NORMALIZE_TO = 10
 TRUSTED_CUTOFF = 5
 
+_be_quiet = False
 def notify(s, *args, **kwargs):
     "A simple logging function => stderr."
-    print(s.format(*args, **kwargs), file=sys.stderr)
+    if not _be_quiet:
+        print(s.format(*args, **kwargs), file=sys.stderr)
 
 
 def trusted_regions(seq, errors_at, minsize):
@@ -80,7 +82,12 @@ def run(ct, hll, num_kmers, ksize):
             errors_at = ct.find_spectral_error_positions(seq, TRUSTED_CUTOFF)
 
             for subseq in trusted_regions(seq, errors_at, ksize):
-                sys.stdout.write('>{}\n{}\n'.format(n_output, subseq))
+                try:
+                    sys.stdout.write('>{}\n{}\n'.format(n_output, subseq))
+                except BrokenPipeError:
+                    notify('cannot write to output; broken pipe. exiting.')
+                    return 0
+
                 hll.consume_string(subseq)
                 n_output += 1
         else:                             # if low abundance, just consume
@@ -98,11 +105,16 @@ def run(ct, hll, num_kmers, ksize):
 
 
 def main():
+    global _be_quiet
     parser = argparse.ArgumentParser()
     parser.add_argument('-k', '--ksize', type=int, default=DEFAULT_K)
     parser.add_argument('-F', '--fp-rate', type=float, default=DEFAULT_FP)
     parser.add_argument('-n', '--num-kmers', type=float, default=DEFAULT_N)
+    parser.add_argument('-q', '--quiet', action='store_true')
     args = parser.parse_args()
+
+    if args.quiet:
+        _be_quiet = True
 
     notify('')
     notify('syrah!')
