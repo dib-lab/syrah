@@ -1,4 +1,9 @@
 #! /usr/bin/env python
+"""
+Consume FASTA/FASTQ on stdin and output trusted subsequences.
+
+See: https://github.com/dib-lab/syrah
+"""
 from __future__ import print_function
 import sys
 import argparse
@@ -15,6 +20,7 @@ NORMALIZE_TO = 10
 TRUSTED_CUTOFF = 5
 
 def notify(s, *args, **kwargs):
+    "A simple logging function => stderr."
     print(s.format(*args, **kwargs), file=sys.stderr)
 
 
@@ -109,12 +115,18 @@ def main():
     notify("creating counttable using {} x {} bytes",
            mem.num_htables, mem.htable_size)
 
+    # counttable to store the counts
     ct = Counttable(args.ksize, mem.htable_size, mem.num_htables)
+
+    # HyperLogLog counter to track the number of k-mers (could do this with
+    # the Counttable, too, I guess, but I trust HLL more ;).
     hll = HLLCounter(0.01, args.ksize)
 
+    # runme!
     try:
         retval = run(ct, hll, int(args.num_kmers), args.ksize)
     except ValueError:
+        # this will be triggered by screed on bad input.
         notify("** error on input; quitting **")
         sys.exit(-1)
 
