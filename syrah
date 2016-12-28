@@ -84,8 +84,8 @@ def run(ct, hll, num_kmers, ksize):
             for subseq in trusted_regions(seq, errors_at, ksize):
                 try:
                     sys.stdout.write('>{}\n{}\n'.format(n_output, subseq))
-                except BrokenPipeError:
-                    notify('cannot write to output; broken pipe. exiting.')
+                except:
+                    notify('error in writing - exiting.')
                     return 0
 
                 hll.consume_string(subseq)
