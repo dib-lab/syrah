@@ -3,11 +3,14 @@
 Consume FASTA/FASTQ on stdin and output trusted subsequences.
 
 See: https://github.com/dib-lab/syrah
+
+Copyright (c) 2016, The Regents of the University of California.
 """
 from __future__ import print_function
 import sys
 import argparse
 import screed
+import khmer
 from khmer import Counttable, HLLCounter, khmer_args
 from khmer import utils as khmer_utils
 
@@ -24,6 +27,11 @@ def notify(s, *args, **kwargs):
     "A simple logging function => stderr."
     if not _be_quiet:
         print(s.format(*args, **kwargs), file=sys.stderr)
+
+
+def error(s, *args, **kwargs):
+    "A simple logging function => stderr."
+    print(s.format(*args, **kwargs), file=sys.stderr)
 
 
 def trusted_regions(seq, errors_at, minsize):
@@ -96,8 +104,8 @@ def run(ct, hll, num_kmers, ksize):
     # post loop, check if we found enough k-mers; exit with an error if not.
     cardinality = hll.estimate_cardinality()
     if cardinality < num_kmers:
-        notify('reached end of input without finding enough k-mers :(')
-        notify('(found {}; wanted {})', hll.estimate_cardinality(), num_kmers)
+        error('reached end of input without finding enough k-mers :(')
+        error('(found {}; wanted {})', hll.estimate_cardinality(), num_kmers)
         return -1
 
     # success!
@@ -139,9 +147,16 @@ def main():
         retval = run(ct, hll, int(args.num_kmers), args.ksize)
     except ValueError:
         # this will be triggered by screed on bad input.
-        notify("** error on input; quitting **")
+        error("** error on input; is it FASTA/FASTQ? quitting **")
         sys.exit(-1)
 
+    fp_rate = khmer.calc_expected_collisions(ct, True, max_false_pos=.8)
+    if fp_rate > 0.8:
+        error("khmer counting fp rate unexpectedly high - {:1.3f}.", fp_rate)
+        error("there is something unusual about your data.")
+        error("don't trust these results.")
+        sys.exit(-1)
+        
     sys.exit(retval)
 
 
