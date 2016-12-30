@@ -68,6 +68,10 @@ def run(ct, hll, num_kmers, ksize):
 
     # iterate over input records
     for n, record in enumerate(clean_iter):
+        # too short a sequence? ignore.
+        if len(record.sequence) < ksize:
+            continue
+
         # at each watermark, print status & check cardinality
         if n >= watermark:
             cardinality = hll.estimate_cardinality()
@@ -145,9 +149,11 @@ def main():
     # runme!
     try:
         retval = run(ct, hll, int(args.num_kmers), args.ksize)
-    except ValueError:
+    except ValueError as e:
         # this will be triggered by screed on bad input.
         error("** error on input; is it FASTA/FASTQ? quitting **")
+        raise
+        error("specifically, the error is: '{}'", str(e))
         sys.exit(-1)
 
     fp_rate = khmer.calc_expected_collisions(ct, True, max_false_pos=.8)
@@ -161,4 +167,4 @@ def main():
 
 
 if __name__ == '__main__':
-   main()
+    main()
