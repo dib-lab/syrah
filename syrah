@@ -17,7 +17,7 @@ from khmer import utils as khmer_utils
 DEFAULT_N = 1e6
 DEFAULT_FP = 0.05
 DEFAULT_K = 21
-WATERMARK_SIZE = 10000
+WATERMARK_SIZE = 1e6
 
 NORMALIZE_TO = 10
 TRUSTED_CUTOFF = 5
@@ -65,19 +65,23 @@ def run(ct, hll, num_kmers, ksize):
     clean_iter = khmer_utils.clean_input_reads(screed_iter)
     watermark = WATERMARK_SIZE
     n_output = 0
+    total_seq = 0
+    seq_output = 0
 
     # iterate over input records
-    for n, record in enumerate(clean_iter):
+    for record in clean_iter:
+        total_seq += len(record.sequence)
+
         # too short a sequence? ignore.
         if len(record.sequence) < ksize:
             continue
 
         # at each watermark, print status & check cardinality
-        if n >= watermark:
+        if total_seq >= watermark:
             cardinality = hll.estimate_cardinality()
 
-            notify('... read {} sequences, ~{} kmers; output {} regions',
-                   n, cardinality, n_output)
+            notify('... consumed {:g} bases, ~{} kmers; output {:g} n bases',
+                   watermark, cardinality, n_output)
             watermark += WATERMARK_SIZE
 
             # done? if so, exit.
@@ -94,14 +98,16 @@ def run(ct, hll, num_kmers, ksize):
             errors_at = ct.find_spectral_error_positions(seq, TRUSTED_CUTOFF)
 
             for subseq in trusted_regions(seq, errors_at, ksize):
+
                 try:
                     sys.stdout.write('>{}\n{}\n'.format(n_output, subseq))
+                    n_output += 1
                 except:
                     notify('error in writing - exiting.')
                     return 0
 
                 hll.consume_string(subseq)
-                n_output += 1
+                seq_output += len(subseq)
         else:                             # if low abundance, just consume
             ct.consume(record.cleaned_seq)
 
