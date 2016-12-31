@@ -81,7 +81,7 @@ def run(ct, hll, num_kmers, ksize):
             cardinality = hll.estimate_cardinality()
 
             notify('... consumed {:g} bases, ~{} kmers; output {:g} n bases',
-                   watermark, cardinality, n_output)
+                   watermark, cardinality, seq_output)
             watermark += WATERMARK_SIZE
 
             # done? if so, exit.
