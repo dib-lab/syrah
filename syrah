@@ -129,6 +129,7 @@ def main():
     parser.add_argument('-F', '--fp-rate', type=float, default=DEFAULT_FP)
     parser.add_argument('-n', '--num-kmers', type=float, default=DEFAULT_N)
     parser.add_argument('-q', '--quiet', action='store_true')
+    parser.add_argument('-a', '--allow-small', action='store_true', default=False)
     args = parser.parse_args()
 
     if args.quiet:
@@ -168,7 +169,11 @@ def main():
         error("there is something unusual about your data.")
         error("don't trust these results.")
         sys.exit(-1)
-        
+
+    if args.allow_small and retval == -1:
+        # Dataset has < n kmers, consider it successful anyway
+        sys.exit(0)
+
     sys.exit(retval)
 
 

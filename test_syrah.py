@@ -118,17 +118,20 @@ class TestKmerStuff(object):
 
         return inp
 
-    def run_cmd(self, seqs, k=21, n=1000, fail_ok=False):
+    def run_cmd(self, seqs, k=21, n=1000, allow_small=False, fail_ok=False):
         with TempDirectory() as location:
             fp = open(os.path.join(location, 'inp.fa'), 'w')
             fp.write(seqs)
             fp.close()
-        
+
             cmd = """
 
-               cat inp.fa | {scripts}/syrah -k {ksize} -n {n}
+               cat inp.fa | {scripts}/syrah -k {ksize} -n {n} {small}
 
-            """.format(scripts=scriptpath(), ksize=k, n=n)
+            """.format(scripts=scriptpath(),
+                       ksize=k,
+                       n=n,
+                       small="-a" if allow_small else "")
             (status, out, err) = run_shell_cmd(cmd, fail_ok=fail_ok,
                                                in_directory = location)
 
@@ -149,6 +152,12 @@ class TestKmerStuff(object):
         assert status == 255
         assert not out
         assert 'found 0' in err
+
+    def test_allow_small(self):
+        seqs = self.make_seqs(10, 5)
+        status, out, err = self.run_cmd(seqs, k=15, allow_small=True)
+
+        assert status == 0
 
     def test_single_a_returned(self):
         seqs = self.make_seqs(11, 5)
@@ -173,5 +182,6 @@ class TestKmerStuff(object):
         print(out)
 
         assert status == 255
-        assert out == '>0\nGGACAGAGGAGAGACGAATG\n>1\nATGAGAGATGAGATGAGAGA\n'
+        assert '\nGGACAGAGGAGAGACGAATG\n' in out
+        assert '\nATGAGAGATGAGATGAGAGA\n' in out
         assert 'found 12' in err
